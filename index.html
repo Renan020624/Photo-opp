@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Photo Opp</title>
+  <style>
+    /* Reset */
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(135deg, #1f1c2c, #928dab);
+      color: #f0f0f5;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      flex-direction: column;
+      text-align: center;
+      padding: 1.5rem;
+      user-select: none;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    h1, h2 {
+      margin: 0 0 1.25rem 0;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+    }
+
+    button {
+      padding: 0.9rem 2.2rem;
+      margin: 0.7rem 0.6rem;
+      border: none;
+      border-radius: 2rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #4c91f7;
+      color: white;
+      box-shadow: 0 0.4rem 1rem rgba(76, 145, 247, 0.4);
+      transition: background-color 0.3s ease, transform 0.15s ease;
+      user-select: none;
+      min-width: 8rem;
+      max-width: 100%;
+      word-break: keep-all;
+    }
+    button:hover {
+      background: #357ae8;
+      transform: translateY(-0.15rem);
+      box-shadow: 0 0.5rem 1.25rem rgba(53, 122, 232, 0.6);
+    }
+    button:active {
+      transform: translateY(0);
+      box-shadow: 0 0.25rem 0.6rem rgba(53, 122, 232, 0.3);
+    }
+
+    #canvas, #preview {
+      width: 100%;
+      max-width: 400px;
+      max-height: 80vh;
+      margin: 1.5rem auto;
+      border-radius: 1.25rem;
+      box-shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.7);
+      background: white;
+      object-fit: contain;
+      border: 0.4rem solid #4c91f7;
+      transition: opacity 0.4s ease;
+      user-select: none;
+    }
+
+    #preview {
+      height: auto;
+      aspect-ratio: 9 / 16; /* largura x altura do vídeo 720x1280 */
+    }
+
+    #qr canvas {
+      margin-top: 1.5rem;
+      filter: drop-shadow(0 0.15rem 0.3rem rgba(0,0,0,0.5));
+      border-radius: 0.75rem;
+      max-width: 80vw;
+      max-height: 80vw;
+      width: 100%;
+      height: auto;
+      user-select: none;
+    }
+
+    #count {
+      font-size: 4.5rem;
+      font-weight: 900;
+      color: #f4a261;
+      text-shadow: 0 0 1.2rem #f4a261aa;
+      margin: 1.25rem 0 2rem 0;
+      user-select: none;
+      line-height: 1;
+    }
+
+    a {
+      color: #90caf9;
+      font-weight: 600;
+      text-decoration: none;
+      transition: color 0.3s ease;
+      word-break: break-word;
+    }
+    a:hover {
+      color: #42a5f5;
+      text-decoration: underline;
+    }
+
+    /* Transparência suave para esconder elementos */
+    .hidden {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    /* Media queries para telas maiores */
+    @media (min-width: 640px) {
+      button {
+        font-size: 1.2rem;
+        padding: 1rem 2.6rem;
+        min-width: 10rem;
+      }
+      #canvas, #preview {
+        max-width: 480px;
+      }
+      #count {
+        font-size: 6rem;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      #canvas, #preview {
+        max-width: 600px;
+      }
+      #count {
+        font-size: 8rem;
+      }
+    }
+
+    @media (min-width: 1600px) {
+      #canvas, #preview {
+        max-width: 720px;
+      }
+    }
+
+  </style>
+</head>
+<body>
+
+  <div id="app">
+    <button id="startBtn">Toque para Iniciar</button>
+  </div>
+
+  <video id="video" autoplay playsinline style="display:none;"></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <img id="preview" style="display:none;" alt="Preview da foto" />
+  <div id="qr"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+
+  <script>
+    const app = document.getElementById('app');
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const preview = document.getElementById('preview');
+    const qrDiv = document.getElementById('qr');
+
+    let stream = null;
+    let imageFinal = null;
+
+    async function startCamera() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        video.srcObject = stream;
+      } catch (error) {
+        alert('Erro ao acessar a câmera: ' + error.message);
+      }
+    }
+
+    function show(element) {
+      element.style.display = 'block';
+      setTimeout(() => element.style.opacity = '1', 20);
+    }
+
+    function hide(element) {
+      element.style.opacity = '0';
+      setTimeout(() => element.style.display = 'none', 300);
+    }
+
+    function reset() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      hide(canvas);
+      hide(preview);
+      hide(video);
+      qrDiv.innerHTML = '';
+      app.innerHTML = '<button id="startBtn">Toque para Iniciar</button>';
+      document.getElementById('startBtn').onclick = init;
+    }
+
+    function init() {
+      app.innerHTML = '<button id="captureBtn">Capturar</button>';
+      show(video);
+      startCamera();
+      document.getElementById('captureBtn').onclick = startCountdown;
+    }
+
+    function startCountdown() {
+      let count = 3;
+      app.innerHTML = `<h1 id="count">${count}</h1>`;
+      const interval = setInterval(() => {
+        count--;
+        if (count > 0) {
+          document.getElementById('count').textContent = count;
+        } else {
+          clearInterval(interval);
+          capturePhoto();
+        }
+      }, 1000);
+    }
+
+    function capturePhoto() {
+      // Ajusta o tamanho para o vídeo real capturado, aqui 720x1280 (portrait)
+      const width = 720;
+      const height = 1280;
+
+      canvas.width = width;
+      canvas.height = height;
+
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(video, 0, 0, width, height);
+
+      const dataUrl = canvas.toDataURL('image/jpeg');
+      imageFinal = dataUrl;
+
+      preview.src = dataUrl;
+      show(preview);
+      hide(video);
+      hide(canvas);
+
+      app.innerHTML = `
+        <button id="redo">Refazer</button>
+        <button id="approve">Aprovar</button>
+      `;
+      document.getElementById('redo').onclick = init;
+      document.getElementById('approve').onclick = approveImage;
+    }
+
+    function approveImage() {
+      app.innerHTML = `
+        <h2>Foto final:</h2>
+        <a href="${imageFinal}" download="sua-foto.jpg">Clique aqui para baixar</a>
+        <p style="margin-top:20px; color:#cfd8dc;">Reiniciando em 10 segundos...</p>
+      `;
+      qrDiv.innerHTML = '';
+      QRCode.toCanvas(document.createElement('canvas'), imageFinal, function (err, canvasQR) {
+        if (!err) {
+          qrDiv.appendChild(canvasQR);
+        }
+      });
+
+      setTimeout(reset, 10000);
+    }
+
+    reset();
+  </script>
+
+</body>
+</html>
